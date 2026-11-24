@@ -1,152 +1,147 @@
-// /api/pedidos
-const router = require('express').Router();
-const { query, transaccion } = require('../db');
-const { ROLES, requiereSesion, requiereRol, sucursalDelDueno } = require('../middleware/auth');
+// Pedidos y carrito: ahora se guardan en SQL Server a través del backend.
+//   GET   /api/pedidos               → pedidos que le tocan al usuario (según su rol)
+//   GET   /api/pedidos/:id           → un pedido con sus productos
+//   POST  /api/pedidos               → confirma el carrito y crea el pedido
+//   PATCH /api/pedidos/:id/estado    → cambia el estado (dueño / admin)
+//   /api/carrito ...                 → carrito del comprador
+// Requiere js/app.js (api, obtenerUsuarioActual) y js/productos.js (leerProductos).
 
-router.use(requiereSesion);
+// Mismos estados que la tabla EstadoPedido de la base de datos
+var ESTADOS_PEDIDO = ['Pendiente', 'En preparación', 'Entregado', 'Cancelado'];
 
-const ESTADOS = { 'Pendiente': 1, 'En preparación': 2, 'Entregado': 3, 'Cancelado': 4 };
-// El nombre del estado sale del id (no del texto de la BD) para que no fallen los acentos
-const NOMBRE_ESTADO = { 1: 'Pendiente', 2: 'En preparación', 3: 'Entregado', 4: 'Cancelado' };
+/* ---------- Pedidos ---------- */
 
-// Filtro según el rol: el comprador ve los suyos, el dueño los de su sucursal, el admin todos
-async function filtroPorRol(usuario) {
-    if (usuario.rol === ROLES.COMPRADOR) return { sql: ' AND p.id_cliente = @uid', params: { uid: usuario.id } };
-    if (usuario.rol === ROLES.DUENO) {
-        const suc = await sucursalDelDueno(usuario.id);
-        return { sql: ' AND p.id_sucursal = @suc', params: { suc: suc ? suc.id_sucursal : -1 } };
-    }
-    return { sql: '', params: {} };
+function leerPedidos() {
+    return api('GET', '/api/pedidos');
 }
 
-// Trae pedidos con sus productos, con la misma forma que usaba el frontend
-async function buscarPedidos(usuario, extraSql = '', extraParams = {}) {
-    const f = await filtroPorRol(usuario);
-    const params = { ...f.params, ...extraParams };
-    const pedidos = await query(`
-        SELECT p.id_pedido AS id, u.correo, u.nombre_completo AS cliente, p.fecha_hora AS fecha,
-               p.id_estado, p.total, p.notas, p.metodo_pago AS pago,
-               s.nombre AS sucursal, s.direccion AS sucursal_direccion, s.telefono AS sucursal_telefono
-        FROM Pedido p
-        JOIN Usuario u ON u.id_usuario = p.id_cliente
-        JOIN EstadoPedido e ON e.id_estado = p.id_estado
-        JOIN Sucursal s ON s.id_sucursal = p.id_sucursal
-        WHERE 1 = 1${f.sql}${extraSql}
-        ORDER BY p.id_pedido DESC`, params);
-    if (!pedidos.length) return [];
-
-    const detalles = await query(`
-        SELECT d.id_pedido, d.id_producto, d.nombre_producto AS nombre, d.precio_unitario AS precio, d.cantidad
-        FROM DetallePedido d
-        JOIN Pedido p ON p.id_pedido = d.id_pedido
-        JOIN EstadoPedido e ON e.id_estado = p.id_estado
-        WHERE 1 = 1${f.sql}${extraSql}
-        ORDER BY d.id_detalle`, params);
-
-    const porId = {};
-    pedidos.forEach(p => { p.estado = NOMBRE_ESTADO[p.id_estado]; delete p.id_estado; p.items = []; porId[p.id] = p; });
-    detalles.forEach(d => {
-        if (porId[d.id_pedido]) porId[d.id_pedido].items.push({ id_producto: d.id_producto, nombre: d.nombre, precio: d.precio, cantidad: d.cantidad });
-    });
-    return pedidos;
+// Para el historial: el backend ya filtra por rol (el comprador solo recibe los suyos)
+function pedidosParaUsuario() {
+    return leerPedidos();
 }
 
-// GET /api/pedidos?estado=Pendiente
-router.get('/', async (req, res) => {
-    if (req.query.estado) {
-        return res.json(await buscarPedidos(req.usuario, ' AND p.id_estado = @estado', { estado: ESTADOS[req.query.estado] || 0 }));
+function buscarPedido(id) {
+    return api('GET', '/api/pedidos/' + encodeURIComponent(id));
+}
+
+function cambiarEstadoPedido(id, estado) {
+    return api('PATCH', '/api/pedidos/' + id + '/estado', { estado: estado });
+}
+
+// Convierte el carrito del usuario en pedido
+function crearPedido(extra) {
+    extra = extra || {};
+    return api('POST', '/api/pedidos', { notas: extra.notas || '', pago: extra.pago || 'Efectivo' });
+}
+
+/* ---------- Utilidades de formato ---------- */
+
+function totalItems(items) {
+    var t = 0;
+    for (var i = 0; i < items.length; i++) { t += Number(items[i].precio) * items[i].cantidad; }
+    return t;
+}
+
+function formatoDinero(n) {
+    return '$' + Number(n).toFixed(2);
+}
+
+function formatoFecha(iso) {
+    // SQL Server guarda la hora local sin zona; el servidor la manda como "...Z".
+    // Se quita la Z para mostrarla tal como está guardada.
+    var d = new Date(String(iso).replace(/Z$/, ''));
+    if (isNaN(d.getTime())) { return iso; }
+    function dos(n) { return (n < 10 ? '0' : '') + n; }
+    return dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear() + ' - ' + dos(d.getHours()) + ':' + dos(d.getMinutes());
+}
+
+function claseEstado(estado) {
+    switch (estado) {
+        case 'Pendiente': return 'badge-pendiente';
+        case 'En preparación': return 'badge-preparacion';
+        case 'Entregado': return 'badge-entregado';
+        case 'Cancelado': return 'badge-agotado';
     }
-    res.json(await buscarPedidos(req.usuario));
-});
+    return 'badge-pendiente';
+}
 
-// GET /api/pedidos/:id
-router.get('/:id', async (req, res) => {
-    const lista = await buscarPedidos(req.usuario, ' AND p.id_pedido = @id', { id: parseInt(req.params.id, 10) || 0 });
-    if (!lista.length) return res.status(404).json({ error: 'No se encontró el pedido.' });
-    res.json(lista[0]);
-});
+function badgeEstado(estado) {
+    return '<span class="badge ' + claseEstado(estado) + '">' + esc(estado) + '</span>';
+}
 
-// POST /api/pedidos   { notas?, pago? }   → convierte el carrito del comprador en pedido
-router.post('/', requiereRol(ROLES.COMPRADOR), async (req, res) => {
-    const notas = req.body.notas ? String(req.body.notas).slice(0, 300) : null;
-    const pago = ['Efectivo', 'Tarjeta', 'Transferencia'].includes(req.body.pago) ? req.body.pago : 'Efectivo';
+/* ---------- Carrito del comprador ---------- */
 
-    const idPedido = await transaccion(async (q) => {
-        // Precio y existencia se toman de la BD (no del navegador)
-        const items = await q(`
-            SELECT cd.id_producto, cd.cantidad, pr.nombre, pr.precio, pr.id_sucursal, pr.activo, i.cantidad AS existencia
-            FROM Carrito c
-            JOIN CarritoDetalle cd ON cd.id_carrito = c.id_carrito
-            JOIN Producto pr ON pr.id_producto = cd.id_producto
-            LEFT JOIN Inventario i WITH (UPDLOCK) ON i.id_producto = pr.id_producto
-            WHERE c.id_usuario = @uid`, { uid: req.usuario.id });
+function leerCarrito() {
+    return api('GET', '/api/carrito');
+}
 
-        if (!items.length) throw { status: 400, error: 'Tu carrito está vacío.' };
-        const sucursales = [...new Set(items.map(i => i.id_sucursal))];
-        if (sucursales.length > 1) throw { status: 400, error: 'Tu carrito tiene productos de distintas sucursales. Haz un pedido por sucursal.' };
+function agregarAlCarrito(idProducto, nombre) {
+    return api('POST', '/api/carrito/items', { id_producto: idProducto, nombre: nombre, cantidad: 1 });
+}
 
-        for (const it of items) {
-            if (!it.activo) throw { status: 400, error: '"' + it.nombre + '" ya no está disponible. Quítalo del carrito.' };
-            if (it.existencia !== null && it.existencia < it.cantidad) {
-                throw { status: 400, error: 'Solo quedan ' + it.existencia + ' de "' + it.nombre + '".' };
-            }
+function cambiarCantidadCarrito(idProducto, cantidad) {
+    return api('PUT', '/api/carrito/items/' + idProducto, { cantidad: cantidad });
+}
+
+function vaciarCarrito() {
+    return api('DELETE', '/api/carrito');
+}
+
+// Todos los carritos que los compradores tienen abiertos (para el dueño / admin)
+function leerTodosLosCarritos() {
+    return api('GET', '/api/carrito/todos');
+}
+
+function contarCarrito(items) {
+    var n = 0;
+    for (var i = 0; i < items.length; i++) { n += items[i].cantidad; }
+    return n;
+}
+
+// Barra del carrito al final de las páginas de productos (Cafés, Postres, Bebidas)
+function dibujarCarrito(items) {
+    var usuario = obtenerUsuarioActual();
+    var $caja = $('#carritoCompra');
+    if (!usuario || usuario.rol !== 'Comprador') { $caja.remove(); return; }
+
+    if ($caja.length === 0) {
+        $caja = $('<div id="carritoCompra" class="cart-box"></div>');
+        $('.app-content .mt-4').last().before($caja);
+    }
+    var pintar = function (items) {
+        var html = '<div class="cart-total" style="margin-bottom:10px;"><span><i class="fa-solid fa-cart-shopping"></i> MI CARRITO: ' +
+            contarCarrito(items) + ' producto(s)</span><span>' + formatoDinero(totalItems(items)) + '</span></div>' +
+            '<a href="20_carrito.html" class="btn-green btn-block"><i class="fa-solid fa-cart-shopping"></i> VER CARRITO Y PAGAR</a>';
+        $caja.html(html);
+        $('.nav-carrito-n').text(contarCarrito(items));
+    };
+    if (items) { pintar(items); } else { leerCarrito().then(pintar).catch(function () { }); }
+}
+
+// Conecta los botones ORDENAR / COMPRAR de las páginas de productos con el carrito
+function activarOrdenar() {
+    $(document).on('click', '.btn-ordenar', function () {
+        var usuario = obtenerUsuarioActual();
+        if (!usuario || usuario.rol !== 'Comprador') {
+            alert('Debes iniciar sesión como comprador para realizar un pedido.');
+            window.location.href = '09_login_comprador.html';
+            return;
         }
-
-        const total = items.reduce((t, it) => t + it.precio * it.cantidad, 0);
-        const ped = await q(`
-            INSERT INTO Pedido (id_cliente, id_sucursal, id_estado, total, notas, metodo_pago)
-            OUTPUT INSERTED.id_pedido AS id
-            VALUES (@uid, @suc, 1, @total, @notas, @pago)`,
-            { uid: req.usuario.id, suc: sucursales[0], total, notas, pago });
-        const id = ped[0].id;
-
-        for (const it of items) {
-            await q(`INSERT INTO DetallePedido (id_pedido, id_producto, nombre_producto, cantidad, precio_unitario)
-                     VALUES (@id, @prod, @nombre, @cant, @precio)`,
-                { id, prod: it.id_producto, nombre: it.nombre, cant: it.cantidad, precio: it.precio });
-            await q(`UPDATE Inventario SET cantidad = cantidad - @cant, fecha_actualizacion = GETDATE()
-                     WHERE id_producto = @prod`, { prod: it.id_producto, cant: it.cantidad });
-        }
-
-        // Vaciar el carrito
-        await q(`DELETE cd FROM CarritoDetalle cd JOIN Carrito c ON c.id_carrito = cd.id_carrito
-                 WHERE c.id_usuario = @uid`, { uid: req.usuario.id });
-        return id;
+        var $card = $(this).closest('.product-card');
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+        agregarAlCarrito($card.attr('data-id'), $card.find('h4').text().trim())
+            .then(function (items) {
+                dibujarCarrito(items);
+                var textoOriginal = $btn.data('texto') || $btn.text();
+                $btn.data('texto', textoOriginal).text('✓ AGREGADO');
+                setTimeout(function () { $btn.text(textoOriginal).prop('disabled', false); }, 900);
+            })
+            .catch(function (err) {
+                $btn.prop('disabled', false);
+                if (err.status === 401) { alert('Tu sesión expiró.'); window.location.href = '09_login_comprador.html'; return; }
+                mostrarError(err);
+            });
     });
-
-    const lista = await buscarPedidos(req.usuario, ' AND p.id_pedido = @id', { id: idPedido });
-    res.status(201).json(lista[0]);
-});
-
-// PATCH /api/pedidos/:id/estado   { estado: 'En preparación' }   (Dueño / Admin)
-router.patch('/:id/estado', requiereRol(ROLES.DUENO, ROLES.ADMIN), async (req, res) => {
-    const id = parseInt(req.params.id, 10);
-    const nuevo = ESTADOS[req.body.estado];
-    if (!nuevo) return res.status(400).json({ error: 'Estado no válido.' });
-
-    const lista = await buscarPedidos(req.usuario, ' AND p.id_pedido = @id', { id });
-    if (!lista.length) return res.status(404).json({ error: 'No se encontró el pedido.' });
-    const anterior = ESTADOS[lista[0].estado];
-
-    await transaccion(async (q) => {
-        // Al cancelar se regresan las piezas al inventario; al "des-cancelar" se vuelven a descontar
-        if (anterior !== 4 && nuevo === 4) {
-            await q(`UPDATE i SET i.cantidad = i.cantidad + d.cantidad, i.fecha_actualizacion = GETDATE()
-                     FROM Inventario i JOIN DetallePedido d ON d.id_producto = i.id_producto
-                     WHERE d.id_pedido = @id`, { id });
-        } else if (anterior === 4 && nuevo !== 4) {
-            const faltan = await q(`SELECT d.nombre_producto FROM DetallePedido d
-                                    JOIN Inventario i ON i.id_producto = d.id_producto
-                                    WHERE d.id_pedido = @id AND i.cantidad < d.cantidad`, { id });
-            if (faltan.length) throw { status: 400, error: 'No hay existencia suficiente de "' + faltan[0].nombre_producto + '".' };
-            await q(`UPDATE i SET i.cantidad = i.cantidad - d.cantidad, i.fecha_actualizacion = GETDATE()
-                     FROM Inventario i JOIN DetallePedido d ON d.id_producto = i.id_producto
-                     WHERE d.id_pedido = @id`, { id });
-        }
-        await q('UPDATE Pedido SET id_estado = @estado WHERE id_pedido = @id', { id, estado: nuevo });
-    });
-
-    res.json({ id, estado: req.body.estado });
-});
-
-module.exports = router;
+    dibujarCarrito();
+}
