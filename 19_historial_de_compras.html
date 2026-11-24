@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historial de Compras - Café Central</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container wide">
+    <header class="app-header">
+        <div class="logo-area">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span>CAFÉ CENTRAL - HISTORIAL DE COMPRAS</span>
+        </div>
+        <button class="nav-toggle" id="navToggle"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <main class="app-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 10px;">
+            <h2 style="color: var(--primary-brown);" id="tituloHistorial"><i class="fa-solid fa-clock-rotate-left"></i> HISTORIAL DE COMPRAS</h2>
+            <button class="btn-secondary" id="btnExportar" style="font-size:0.85rem;"><i class="fa-solid fa-file-export"></i> Exportar Reporte</button>
+        </div>
+        <p id="subtituloHistorial" style="font-size:0.85rem; color: var(--text-muted); margin-bottom: 14px;"></p>
+
+        <div class="filtros-pedidos">
+            <input type="text" id="buscarHistorial" class="form-control" placeholder="Buscar por cliente o # de pedido...">
+            <select id="filtroHistorial" class="form-control">
+                <option value="">Todos los estados</option>
+                <option value="Pendiente">Pendiente</option>
+                <option value="En preparación">En preparación</option>
+                <option value="Entregado">Entregado</option>
+                <option value="Cancelado">Cancelado</option>
+            </select>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table" id="tablaHistorial">
+                <thead>
+                    <tr>
+                        <th>PEDIDO</th>
+                        <th class="col-cliente">CLIENTE</th>
+                        <th>FECHA Y HORA</th>
+                        <th>TOTAL</th>
+                        <th>ESTADO</th>
+                        <th>DETALLES</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <p id="totalHistorial" style="text-align:right; font-weight:700; margin-top:10px;"></p>
+
+        <div class="text-center mt-3">
+            <a href="08_seleccion_usuario.html" class="btn-secondary" id="btnVolverHistorial">← VOLVER</a>
+        </div>
+    </main>
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/productos.js"></script>
+    <script src="js/pedidos.js"></script>
+    <script>
+$(document).ready(function(){
+    var usr = obtenerUsuarioActual();
+    if (!usr) {
+        alert('Debes iniciar sesión para ver el historial de pedidos.');
+        window.location.href = '08_seleccion_usuario.html';
+        return;
+    }
+
+    var esComprador = usr.rol === 'Comprador';
+
+    // Cada rol vuelve a su propia pantalla
+    if (esComprador) {
+        $('#btnVolverHistorial').attr('href', '02_menu_principal.html').text('← VOLVER AL MENÚ');
+        $('#tituloHistorial').html('<i class="fa-solid fa-clock-rotate-left"></i> MI HISTORIAL DE COMPRAS');
+        $('#subtituloHistorial').text('Hola ' + usr.nombre + ', aquí puedes ver en qué proceso va cada uno de tus pedidos.');
+        $('.col-cliente').hide();
+    } else if (usr.rol === 'Dueño de Local') {
+        $('#btnVolverHistorial').attr('href', '13_panel_dueno.html').text('← VOLVER AL PANEL');
+        $('#subtituloHistorial').text('Todos los pedidos recibidos en el local. Para cambiar el estado ve a PEDIDOS.');
+    } else {
+        $('#btnVolverHistorial').attr('href', '11_gestion_usuarios.html').text('← VOLVER A ADMINISTRACIÓN');
+        $('#subtituloHistorial').text('Vista de administrador: pedidos de todos los clientes.');
+    }
+
+    var visibles = [];
+
+    function dibujarHistorial(){
+        var filtro = $('#filtroHistorial').val();
+        var texto = $('#buscarHistorial').val().toLowerCase();
+        var lista = pedidosParaUsuario(usr).sort(function(a, b){ return b.id - a.id; });
+        visibles = [];
+        var filas = '', suma = 0;
+        for (var i = 0; i < lista.length; i++) {
+            var p = lista[i];
+            if (filtro && p.estado !== filtro) continue;
+            if (texto && (('#' + p.id + ' ' + p.cliente).toLowerCase().indexOf(texto) === -1)) continue;
+            visibles.push(p);
+            if (p.estado !== 'Cancelado') suma += p.total;
+            filas += '<tr data-id="' + p.id + '"><td>#' + p.id + '</td>' +
+                (esComprador ? '' : '<td>' + p.cliente + '</td>') +
+                '<td>' + formatoFecha(p.fecha) + '</td><td>' + formatoDinero(p.total) + '</td>' +
+                '<td>' + badgeEstado(p.estado) + '</td>' +
+                '<td><button class="btn-green btn-ver" style="padding:4px 10px; font-size:0.75rem;">TICKET</button></td></tr>';
+        }
+        if (!filas) {
+            filas = '<tr><td colspan="6" class="text-center" style="color: var(--text-muted);">' +
+                (esComprador ? 'Aún no tienes pedidos. ¡Haz tu primer pedido desde el menú!' : 'No hay pedidos con este filtro.') + '</td></tr>';
+        }
+        $('#tablaHistorial tbody').html(filas);
+        $('#totalHistorial').text(visibles.length + ' pedido(s) · Total (sin cancelados): ' + formatoDinero(suma));
+    }
+
+    $('#filtroHistorial').on('change', dibujarHistorial);
+    $('#buscarHistorial').on('keyup', dibujarHistorial);
+
+    $(document).on('click', '.btn-ver', function(){
+        window.location.href = '21_ticket.html?id=' + $(this).closest('tr').data('id');
+    });
+
+    // Exporta a CSV lo que se ve en la tabla
+    $('#btnExportar').click(function(){
+        var csv = 'Pedido,Cliente,Correo,Fecha,Productos,Total,Estado\n';
+        for (var i = 0; i < visibles.length; i++) {
+            var p = visibles[i];
+            var prods = p.items.map(function(it){ return it.cantidad + 'x ' + it.nombre; }).join(' | ');
+            csv += [p.id, p.cliente, p.correo, formatoFecha(p.fecha), prods, p.total, p.estado]
+                .map(function(v){ return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',') + '\n';
+        }
+        var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'historial_pedidos.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+
+    // Se actualiza solo si el dueño cambia un estado en otra pestaña
+    window.addEventListener('storage', function(e){
+        if (e.key === LLAVE_PEDIDOS) dibujarHistorial();
+    });
+
+    dibujarHistorial();
+});
+</script>
+</body>
+</html>
