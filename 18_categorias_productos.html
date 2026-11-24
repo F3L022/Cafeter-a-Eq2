@@ -35,33 +35,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>1</td>
-                        <td>Cafés</td>
-                        <td>Bebidas calientes y frías base espresso</td>
-                        <td>
-                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
-                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>Postres</td>
-                        <td>Panadería, pasteles y repostería selecta</td>
-                        <td>
-                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
-                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>3</td>
-                        <td>Bebidas</td>
-                        <td>Agua, jugos naturales y refrescos</td>
-                        <td>
-                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
-                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
-                        </td>
-                    </tr>
+                    <tr><td colspan="4" class="text-center">Cargando...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -77,21 +51,60 @@
     
     <script>
 $(document).ready(function(){
+    var usr = obtenerUsuarioActual();
+    if (!usr || (usr.rol !== 'Dueño de Local' && usr.rol !== 'Administrador')) {
+        alert('Debes iniciar sesión como Dueño de Local.');
+        window.location.href = '12_login_dueno.html';
+        return;
+    }
+
+    var categorias = [];
+
+    function dibujarCategorias(){
+        api('GET', '/api/categorias').then(function(lista){
+            categorias = lista;
+            var filas = '';
+            for (var i = 0; i < lista.length; i++) {
+                var c = lista[i];
+                filas += '<tr data-id="' + c.id + '"><td>' + c.id + '</td><td>' + esc(c.nombre) + '</td><td>' + esc(c.descripcion || '') + '</td>' +
+                    '<td><i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>' +
+                    '<i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i></td></tr>';
+            }
+            $('#tablaCategorias tbody').html(filas);
+        }).catch(mostrarError);
+    }
+
+    function categoriaDeFila($el){
+        var id = $el.closest('tr').data('id');
+        for (var i = 0; i < categorias.length; i++) if (categorias[i].id == id) return categorias[i];
+        return null;
+    }
+
     $('#btnNuevaCat').click(function(){
         var nombre = prompt('Ingresa el nombre de la nueva categoría:');
-        if(nombre){
-            var desc = prompt('Ingresa la descripción:');
-            var id = $('#tablaCategorias tbody tr').length + 1;
-            var row = '<tr><td>'+id+'</td><td>'+nombre+'</td><td>'+(desc||'')+'</td><td><i class="fa-solid fa-pen-to-square" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i><i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i></td></tr>';
-            $('#tablaCategorias tbody').append(row);
-        }
+        if (!nombre) return;
+        var desc = prompt('Ingresa la descripción:') || '';
+        api('POST', '/api/categorias', { nombre: nombre, descripcion: desc }).then(dibujarCategorias).catch(mostrarError);
+    });
+
+    $(document).on('click', '.btn-edit', function(){
+        var c = categoriaDeFila($(this));
+        if (!c) return;
+        var nombre = prompt('Nombre de la categoría:', c.nombre);
+        if (!nombre) return;
+        var desc = prompt('Descripción:', c.descripcion || '');
+        if (desc === null) return;
+        api('PUT', '/api/categorias/' + c.id, { nombre: nombre, descripcion: desc }).then(dibujarCategorias).catch(mostrarError);
     });
 
     $(document).on('click', '.btn-delete', function(){
-        if(confirm('¿Eliminar esta categoría?')){
-            $(this).closest('tr').remove();
+        var c = categoriaDeFila($(this));
+        if (c && confirm('¿Eliminar la categoría "' + c.nombre + '"?')) {
+            api('DELETE', '/api/categorias/' + c.id).then(dibujarCategorias).catch(mostrarError);
         }
     });
+
+    dibujarCategorias();
 });
 </script>
 </body>

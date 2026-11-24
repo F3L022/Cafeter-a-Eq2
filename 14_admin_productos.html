@@ -79,29 +79,54 @@
     <script src="js/productos.js"></script>
     <script>
 $(document).ready(function(){
-    var indiceEditando = -1;
+    var usr = obtenerUsuarioActual();
+    if (!usr || (usr.rol !== 'Dueño de Local' && usr.rol !== 'Administrador')) {
+        alert('Debes iniciar sesión como Dueño de Local.');
+        window.location.href = '12_login_dueno.html';
+        return;
+    }
+
+    var productos = [];
+    var idEditando = null;
+
+    // Las categorías del select salen de la BD
+    api('GET', '/api/categorias').then(function(cats){
+        var ops = '';
+        for (var i = 0; i < cats.length; i++) ops += '<option value="' + esc(cats[i].nombre) + '">' + esc(cats[i].nombre) + '</option>';
+        $('#prodCategoria').html(ops);
+    }).catch(mostrarError);
 
     function dibujarTabla(){
-        var lista = leerProductos();
-        var filas = '';
-        for (var i = 0; i < lista.length; i++) {
-            filas += '<tr data-i="' + i + '"><td>' + lista[i].nombre + '</td><td>$' + lista[i].precio + '</td><td>' + lista[i].categoria + '</td>' +
-                '<td><i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>' +
-                '<i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i></td></tr>';
-        }
-        $('#tablaProductos tbody').html(filas);
+        api('GET', '/api/productos/mios').then(function(lista){
+            productos = lista;
+            var filas = '';
+            for (var i = 0; i < lista.length; i++) {
+                filas += '<tr data-id="' + lista[i].id + '"><td>' + esc(lista[i].nombre) + '</td><td>' + formatoDinero(lista[i].precio) + '</td><td>' + esc(lista[i].categoria) + '</td>' +
+                    '<td><i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>' +
+                    '<i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i></td></tr>';
+            }
+            if (!filas) filas = '<tr><td colspan="4" class="text-center" style="color: var(--text-muted);">Aún no tienes productos.</td></tr>';
+            $('#tablaProductos tbody').html(filas);
+        }).catch(mostrarError);
+    }
+
+    function productoDeFila($el){
+        var id = $el.closest('tr').data('id');
+        for (var i = 0; i < productos.length; i++) if (productos[i].id == id) return productos[i];
+        return null;
     }
 
     $('#btnAgregarProducto').click(function(){
-        indiceEditando = -1;
+        idEditando = null;
         $('#modalProdTitle').text('Nuevo Producto');
         $('#formProducto')[0].reset();
         $('#modalProducto').css('display', 'flex');
     });
 
     $(document).on('click', '.btn-edit', function(){
-        indiceEditando = $(this).closest('tr').data('i');
-        var p = leerProductos()[indiceEditando];
+        var p = productoDeFila($(this));
+        if (!p) return;
+        idEditando = p.id;
         $('#modalProdTitle').text('Editar Producto');
         $('#prodNombre').val(p.nombre);
         $('#prodPrecio').val(p.precio);
@@ -114,11 +139,9 @@ $(document).ready(function(){
     });
 
     $(document).on('click', '.btn-delete', function(){
-        if(confirm('¿Deseas eliminar este producto del catálogo?')){
-            var lista = leerProductos();
-            lista.splice($(this).closest('tr').data('i'), 1);
-            guardarProductos(lista);
-            dibujarTabla();
+        var p = productoDeFila($(this));
+        if (p && confirm('¿Deseas eliminar "' + p.nombre + '" del catálogo?')) {
+            api('DELETE', '/api/productos/' + p.id).then(dibujarTabla).catch(mostrarError);
         }
     });
 
@@ -129,16 +152,12 @@ $(document).ready(function(){
             alert('El precio no puede ser negativo.');
             return;
         }
-        var producto = { nombre: $('#prodNombre').val(), precio: precio, categoria: $('#prodCategoria').val() };
-        var lista = leerProductos();
-        if (indiceEditando >= 0) {
-            lista[indiceEditando] = producto;
-        } else {
-            lista.push(producto);
-        }
-        guardarProductos(lista);
-        $('#modalProducto').hide();
-        dibujarTabla();
+        var producto = { nombre: $('#prodNombre').val().trim(), precio: precio, categoria: $('#prodCategoria').val() };
+        var peticion = idEditando ? api('PUT', '/api/productos/' + idEditando, producto) : api('POST', '/api/productos', producto);
+        peticion.then(function(){
+            $('#modalProducto').hide();
+            dibujarTabla();
+        }).catch(mostrarError);
     });
 
     dibujarTabla();

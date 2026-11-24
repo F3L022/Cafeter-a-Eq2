@@ -22,19 +22,19 @@
         <form id="formConfigLocal">
             <div class="form-group">
                 <label>Nombre del local:</label>
-                <input type="text" class="form-control" value="Café Central - Sucursal Centro">
+                <input type="text" id="sucNombre" class="form-control" required>
             </div>
             <div class="form-group">
                 <label>Dirección:</label>
-                <input type="text" class="form-control" value="Av. Café #123, Centro">
+                <input type="text" id="sucDireccion" class="form-control" required>
             </div>
             <div class="form-group">
                 <label>Teléfono:</label>
-                <input type="text" class="form-control" value="81 1234 5678">
+                <input type="text" id="sucTelefono" class="form-control" maxlength="15" required>
             </div>
             <div class="form-group">
                 <label>Descripción:</label>
-                <textarea class="form-control" rows="3">La mejor experiencia en café.</textarea>
+                <textarea id="sucDescripcion" class="form-control" rows="3"></textarea>
             </div>
 
             <button type="submit" class="btn-green btn-block mb-3">GUARDAR CAMBIOS</button>
@@ -48,9 +48,30 @@
     
     <script>
 $(document).ready(function(){
+    var usr = obtenerUsuarioActual();
+    if (!usr || usr.rol !== 'Dueño de Local') {
+        alert('Debes iniciar sesión como Dueño de Local.');
+        window.location.href = '12_login_dueno.html';
+        return;
+    }
+
+    api('GET', '/api/sucursal/mia').then(function(s){
+        $('#sucNombre').val(s.nombre);
+        $('#sucDireccion').val(s.direccion);
+        $('#sucTelefono').val(s.telefono);
+        $('#sucDescripcion').val(s.descripcion || '');
+    }).catch(mostrarError);
+
     $('#formConfigLocal').submit(function(e){
         e.preventDefault();
-        alert('¡Configuración de la sucursal actualizada correctamente!');
+        api('PUT', '/api/sucursal/mia', {
+            nombre: $('#sucNombre').val().trim(),
+            direccion: $('#sucDireccion').val().trim(),
+            telefono: $('#sucTelefono').val().trim(),
+            descripcion: $('#sucDescripcion').val().trim()
+        }).then(function(){
+            alert('¡Configuración de la sucursal actualizada correctamente!');
+        }).catch(mostrarError);
     });
 });
 </script>

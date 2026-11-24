@@ -67,44 +67,48 @@ $(document).ready(function(){
     if (usr.rol === 'Administrador') $('#btnVolverTicket').attr('href', '19_historial_compras.html').text('← VOLVER');
 
     var params = new URLSearchParams(window.location.search);
-    var p = buscarPedido(params.get('id'));
-
-    // Un comprador solo puede ver sus propios tickets
-    if (!p || (usr.rol === 'Comprador' && p.correo.toLowerCase() !== usr.correo.toLowerCase())) {
-        $('#ticket').html('<p class="centro">No se encontró el ticket solicitado.</p>');
-        return;
-    }
+    var idPedido = params.get('id');
     if (params.get('nuevo') === '1') $('#avisoNuevo').show();
 
-    function dibujarTicket(){
-        p = buscarPedido(p.id);
+    function telefonoBonito(t){
+        t = String(t || '');
+        return t.length === 10 ? t.slice(0, 3) + ' ' + t.slice(3, 6) + ' ' + t.slice(6) : t;
+    }
+
+    function dibujarTicket(p){
         var subtotal = p.total / 1.16;
         var html = '<h3>☕ CAFÉ CENTRAL</h3>' +
-            '<div class="centro">Sucursal Centro<br>Av. Café #123, Centro<br>Tel. 811 234 5678</div>' +
+            '<div class="centro">' + esc(p.sucursal) + '<br>' + esc(p.sucursal_direccion) + '<br>Tel. ' + esc(telefonoBonito(p.sucursal_telefono)) + '</div>' +
             '<div class="linea"></div>' +
             '<div class="fila"><span>TICKET:</span><span>#' + p.id + '</span></div>' +
             '<div class="fila"><span>FECHA:</span><span>' + formatoFecha(p.fecha) + '</span></div>' +
-            '<div class="fila"><span>CLIENTE:</span><span>' + p.cliente + '</span></div>' +
-            '<div class="fila"><span>PAGO:</span><span>' + (p.pago || 'Efectivo') + '</span></div>' +
+            '<div class="fila"><span>CLIENTE:</span><span>' + esc(p.cliente) + '</span></div>' +
+            '<div class="fila"><span>PAGO:</span><span>' + esc(p.pago || 'Efectivo') + '</span></div>' +
             '<div class="fila"><span>ESTADO:</span><span>' + badgeEstado(p.estado) + '</span></div>' +
             '<div class="linea"></div>';
         for (var i = 0; i < p.items.length; i++) {
             var it = p.items[i];
-            html += '<div class="fila"><span>' + it.cantidad + ' x ' + it.nombre + '</span><span>' + formatoDinero(it.precio * it.cantidad) + '</span></div>' +
+            html += '<div class="fila"><span>' + it.cantidad + ' x ' + esc(it.nombre) + '</span><span>' + formatoDinero(it.precio * it.cantidad) + '</span></div>' +
                 '<div style="font-size:0.75rem; color:#777; margin-bottom:4px;">&nbsp;&nbsp;' + formatoDinero(it.precio) + ' c/u</div>';
         }
         html += '<div class="linea"></div>' +
             '<div class="fila"><span>SUBTOTAL</span><span>' + formatoDinero(subtotal) + '</span></div>' +
             '<div class="fila"><span>IVA (16%)</span><span>' + formatoDinero(p.total - subtotal) + '</span></div>' +
             '<div class="fila total"><span>TOTAL</span><span>' + formatoDinero(p.total) + '</span></div>';
-        if (p.notas) html += '<div class="linea"></div><div>NOTAS: ' + p.notas + '</div>';
+        if (p.notas) html += '<div class="linea"></div><div>NOTAS: ' + esc(p.notas) + '</div>';
         html += '<div class="linea"></div><div class="centro">¡Gracias por tu compra!<br>Conserva este ticket.</div>';
         $('#ticket').html(html);
     }
-    dibujarTicket();
 
-    // Si el dueño cambia el estado, el ticket se actualiza solo
-    window.addEventListener('storage', function(e){ if (e.key === LLAVE_PEDIDOS) dibujarTicket(); });
+    // El backend solo regresa el pedido si le pertenece al usuario (o es dueño/admin)
+    function cargarTicket(){
+        return buscarPedido(idPedido).then(dibujarTicket).catch(function(){
+            $('#ticket').html('<p class="centro">No se encontró el ticket solicitado.</p>');
+            clearInterval(timer);
+        });
+    }
+    var timer = setInterval(cargarTicket, 15000); // si el dueño cambia el estado, se actualiza
+    cargarTicket();
 });
 </script>
 </body>

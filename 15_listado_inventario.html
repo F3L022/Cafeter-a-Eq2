@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listado de Inventario - Café Central</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container wide">
+    <header class="app-header">
+        <div class="logo-area">
+            <i class="fa-solid fa-mug-hot"></i>
+            <span>CAFÉ CENTRAL</span>
+        </div>
+        <button class="nav-toggle" id="navToggle"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <main class="app-content">
+        <h2 class="text-center mb-4" style="color: var(--primary-brown);">INVENTARIO <i class="fa-solid fa-boxes-stacked"></i></h2>
+
+        <div class="form-group">
+            <input type="text" id="inputBuscar" class="form-control" placeholder="Buscar producto...">
+        </div>
+
+        <p style="font-size:0.8rem; color: var(--text-muted); margin-bottom:8px;">Toca una fila para seleccionarla y luego usa EDITAR o ELIMINAR (o usa el botón EDITAR de cada fila).</p>
+
+        <div class="table-responsive">
+            <table class="custom-table" id="tablaInventario">
+                <thead>
+                    <tr>
+                        <th>PRODUCTO</th>
+                        <th>CANTIDAD</th>
+                        <th>STOCK MÍN.</th>
+                        <th>PRECIO</th>
+                        <th>ESTADO</th>
+                        <th>ACCIÓN</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+            <button class="btn-green" style="font-size:0.85rem;" id="btnAgregarInv"><i class="fa-solid fa-plus"></i> AGREGAR</button>
+            <button class="btn-secondary" style="font-size:0.85rem;" id="btnEditarInv"><i class="fa-solid fa-pen"></i> EDITAR</button>
+            <button class="btn-red" style="font-size:0.85rem;" id="btnEliminarInv"><i class="fa-solid fa-trash"></i> ELIMINAR</button>
+            <button class="btn-primary" style="font-size:0.85rem;" id="btnActualizarInv"><i class="fa-solid fa-rotate"></i> ACTUALIZAR</button>
+        </div>
+
+        <div class="text-center">
+            <a href="13_panel_dueno.html" class="btn-secondary btn-block">← VOLVER AL PANEL</a>
+        </div>
+    </main>
+</div>
+
+
+<!-- Modal Agregar/Editar Inventario -->
+<div class="modal-overlay" id="modalInventario">
+    <div class="modal-content">
+        <h3 class="text-center mb-3" style="color: var(--primary-brown);" id="modalInvTitle">Editar Producto</h3>
+        <form id="formInventario">
+            <div class="form-group">
+                <label>Producto:</label>
+                <input type="text" id="invNombre" class="form-control" list="listaProductosInv" placeholder="Elige uno de tus productos" required>
+                <datalist id="listaProductosInv"></datalist>
+            </div>
+            <div class="form-group">
+                <label>Cantidad en existencia:</label>
+                <input type="number" min="0" step="1" id="invCantidad" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Stock mínimo (debajo de esto se marca POCO):</label>
+                <input type="number" min="0" step="1" id="invMinimo" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Precio ($):</label>
+                <input type="number" min="0" step="0.5" id="invPrecio" class="form-control" required>
+            </div>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button type="submit" class="btn-green btn-block">Guardar</button>
+                <button type="button" class="btn-red btn-block" id="btnCerrarModalInv">Cancelar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+// Igual que la columna calculada "estado" de la tabla Inventario en la BD
+function badgeInventario(item) {
+    if (item.cantidad <= 0) return '<span class="badge badge-agotado">● AGOTADO</span>';
+    if (item.cantidad <= item.minimo) return '<span class="badge badge-poco">● POCO</span>';
+    return '<span class="badge badge-ok">● OK</span>';
+}
+
+$(document).ready(function(){
+    var usr = obtenerUsuarioActual();
+    if (!usr || (usr.rol !== 'Dueño de Local' && usr.rol !== 'Administrador')) {
+        alert('Debes iniciar sesión como Dueño de Local.');
+        window.location.href = '12_login_dueno.html';
+        return;
+    }
+
+    var inventario = [];
+    var seleccionado = null;   // id_inventario de la fila seleccionada
+    var editando = null;       // null = agregando uno nuevo
+
+    function buscar(id){
+        for (var i = 0; i < inventario.length; i++) if (inventario[i].id == id) return inventario[i];
+        return null;
+    }
+
+    function dibujarInventario(){
+        return api('GET', '/api/inventario').then(function(lista){
+            inventario = lista;
+            var filas = '';
+            for (var i = 0; i < lista.length; i++) {
+                var it = lista[i];
+                filas += '<tr class="fila-click' + (it.id === seleccionado ? ' fila-seleccionada' : '') + '" data-id="' + it.id + '">' +
+                    '<td>' + esc(it.nombre) + '</td><td>' + it.cantidad + '</td><td>' + it.minimo + '</td><td>$' + Number(it.precio) + '</td>' +
+                    '<td>' + badgeInventario(it) + '</td>' +
+                    '<td><button type="button" class="btn-secondary btn-edit-inv" style="padding:4px 10px; font-size:0.75rem;"><i class="fa-solid fa-pen"></i> EDITAR</button></td></tr>';
+            }
+            if (!filas) filas = '<tr><td colspan="6" class="text-center" style="color: var(--text-muted);">No hay productos en inventario.</td></tr>';
+            $('#tablaInventario tbody').html(filas);
+            $('#inputBuscar').trigger('keyup');
+        }).catch(mostrarError);
+    }
+
+    function abrirModal(id){
+        editando = id;
+        if (id !== null) {
+            var it = buscar(id);
+            $('#modalInvTitle').text('Editar: ' + it.nombre);
+            $('#invNombre').val(it.nombre);
+            $('#invCantidad').val(it.cantidad);
+            $('#invMinimo').val(it.minimo);
+            $('#invPrecio').val(it.precio);
+        } else {
+            $('#modalInvTitle').text('Agregar al Inventario');
+            $('#formInventario')[0].reset();
+            $('#invMinimo').val(5);
+        }
+        $('#modalInventario').css('display', 'flex');
+        $('#invCantidad').focus();
+    }
+
+    $('#inputBuscar').on('keyup', function(){
+        var value = $(this).val().toLowerCase();
+        $('#tablaInventario tbody tr').filter(function(){
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+        });
+    });
+
+    // Seleccionar fila
+    $(document).on('click', '#tablaInventario tbody tr.fila-click', function(){
+        seleccionado = $(this).data('id');
+        $('#tablaInventario tbody tr').removeClass('fila-seleccionada');
+        $(this).addClass('fila-seleccionada');
+    });
+
+    // Botón EDITAR de cada fila
+    $(document).on('click', '.btn-edit-inv', function(e){
+        e.stopPropagation();
+        seleccionado = $(this).closest('tr').data('id');
+        $('#tablaInventario tbody tr').removeClass('fila-seleccionada');
+        $(this).closest('tr').addClass('fila-seleccionada');
+        abrirModal(seleccionado);
+    });
+
+    $('#btnEditarInv').click(function(){
+        if (seleccionado === null) { alert('Primero toca la fila del producto que quieres editar.'); return; }
+        abrirModal(seleccionado);
+    });
+
+    $('#btnAgregarInv').click(function(){ abrirModal(null); });
+
+    $('#btnEliminarInv').click(function(){
+        if (seleccionado === null) { alert('Primero toca la fila del producto que quieres eliminar.'); return; }
+        var it = buscar(seleccionado);
+        if (confirm('¿Quitar "' + it.nombre + '" del inventario? (El producto sigue en el menú)')) {
+            api('DELETE', '/api/inventario/' + it.id).then(function(){
+                seleccionado = null;
+                dibujarInventario();
+            }).catch(mostrarError);
+        }
+    });
+
+    $('#btnActualizarInv').click(function(){
+        dibujarInventario().then(function(){ alert('¡Inventario actualizado correctamente!'); });
+    });
+
+    $('#btnCerrarModalInv').click(function(){ $('#modalInventario').hide(); });
+
+    $('#formInventario').submit(function(e){
+        e.preventDefault();
+        var item = {
+            nombre: $('#invNombre').val().trim(),
+            cantidad: parseInt($('#invCantidad').val(), 10),
+            minimo: parseInt($('#invMinimo').val(), 10),
+            precio: parseFloat($('#invPrecio').val())
+        };
+        if (!item.nombre) { alert('Escribe el nombre del producto.'); return; }
+        if (isNaN(item.cantidad) || item.cantidad < 0 || isNaN(item.minimo) || item.minimo < 0 || isNaN(item.precio) || item.precio < 0) {
+            alert('Cantidad, stock mínimo y precio deben ser números positivos.');
+            return;
+        }
+        var peticion = editando !== null ? api('PUT', '/api/inventario/' + editando, item) : api('POST', '/api/inventario', item);
+        peticion.then(function(){
+            $('#modalInventario').hide();
+            dibujarInventario();
+        }).catch(mostrarError);
+    });
+
+    // Sugerencias para el campo "Producto" (deben ser productos dados de alta en PRODUCTOS)
+    api('GET', '/api/productos/mios').then(function(lista){
+        $('#listaProductosInv').html(lista.map(function(p){ return '<option value="' + esc(p.nombre) + '">'; }).join(''));
+    }).catch(function(){});
+
+    dibujarInventario();
+});
+</script>
+</body>
+</html>
