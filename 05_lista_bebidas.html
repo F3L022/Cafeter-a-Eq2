@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Bebidas - Café Central</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container">
+    <header class="app-header">
+        <div class="logo-area">
+            <i class="fa-solid fa-mug-hot"></i>
+            <span>CAFÉ CENTRAL</span>
+        </div>
+        <button class="nav-toggle" id="navToggle"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <main class="app-content">
+        <h2 class="text-center mb-4" style="color: var(--primary-brown);">BEBIDAS <i class="fa-solid fa-glass-water"></i></h2>
+        
+        <div class="product-card">
+            <div class="product-info">
+                <img src="img/agua.jpg" alt="Agua Natural" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=100'">
+                <div class="product-details">
+                    <h4>AGUA NATURAL</h4>
+                    <div class="price">$20</div>
+                </div>
+            </div>
+            <button class="btn-primary btn-ordenar">COMPRAR</button>
+        </div>
+
+        <div class="product-card">
+            <div class="product-info">
+                <img src="img/mineral.jpg" alt="Agua Mineral" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1559839914-17aae19cec71?w=100'">
+                <div class="product-details">
+                    <h4>AGUA MINERAL</h4>
+                    <div class="price">$25</div>
+                </div>
+            </div>
+            <button class="btn-primary btn-ordenar">COMPRAR</button>
+        </div>
+
+        <div class="product-card">
+            <div class="product-info">
+                <img src="img/jugo.jpg" alt="Jugo Natural" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1613478223719-2ab802602423?w=100'">
+                <div class="product-details">
+                    <h4>JUGO NATURAL</h4>
+                    <div class="price">$35</div>
+                </div>
+            </div>
+            <button class="btn-primary btn-ordenar">COMPRAR</button>
+        </div>
+
+        <div class="product-card">
+            <div class="product-info">
+                <img src="img/chocofrio.jpg" alt="Chocolate Frío" class="product-img" onerror="this.src='https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=100'">
+                <div class="product-details">
+                    <h4>CHOCOLATE FRÍO</h4>
+                    <div class="price">$45</div>
+                </div>
+            </div>
+            <button class="btn-primary btn-ordenar">COMPRAR</button>
+        </div>
+
+        <div class="mt-4">
+            <a href="02_menu_principal.html" class="btn-secondary btn-block">← VOLVER AL MENÚ</a>
+        </div>
+    </main>
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/app.js"></script>
+    
+    <script src="js/productos.js"></script>
+    <script src="js/pedidos.js"></script>
+    <script>$(function(){ actualizarPrecios(); activarOrdenar(); });</script>
+</body>
+</html>
