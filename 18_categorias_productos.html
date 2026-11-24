@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorías de Productos - Café Central</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container wide">
+    <header class="app-header">
+        <div class="logo-area">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>CAFÉ CENTRAL - CATEGORÍAS</span>
+        </div>
+        <button class="nav-toggle" id="navToggle"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <main class="app-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+            <h2 style="color: var(--primary-brown);">CATEGORÍAS DE PRODUCTOS</h2>
+            <button class="btn-green" id="btnNuevaCat">+ NUEVA CATEGORÍA</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table" id="tablaCategorias">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>NOMBRE DE CATEGORÍA</th>
+                        <th>DESCRIPCIÓN</th>
+                        <th>ACCIONES</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Cafés</td>
+                        <td>Bebidas calientes y frías base espresso</td>
+                        <td>
+                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
+                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Postres</td>
+                        <td>Panadería, pasteles y repostería selecta</td>
+                        <td>
+                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
+                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Bebidas</td>
+                        <td>Agua, jugos naturales y refrescos</td>
+                        <td>
+                            <i class="fa-solid fa-pen-to-square btn-edit" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i>
+                            <i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="text-center mt-3">
+            <a href="13_panel_dueno.html" class="btn-secondary">← VOLVER</a>
+        </div>
+    </main>
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/app.js"></script>
+    
+    <script>
+$(document).ready(function(){
+    $('#btnNuevaCat').click(function(){
+        var nombre = prompt('Ingresa el nombre de la nueva categoría:');
+        if(nombre){
+            var desc = prompt('Ingresa la descripción:');
+            var id = $('#tablaCategorias tbody tr').length + 1;
+            var row = '<tr><td>'+id+'</td><td>'+nombre+'</td><td>'+(desc||'')+'</td><td><i class="fa-solid fa-pen-to-square" style="color:#0d6efd; cursor:pointer; margin-right:10px;"></i><i class="fa-solid fa-trash btn-delete" style="color:#dc3545; cursor:pointer;"></i></td></tr>';
+            $('#tablaCategorias tbody').append(row);
+        }
+    });
+
+    $(document).on('click', '.btn-delete', function(){
+        if(confirm('¿Eliminar esta categoría?')){
+            $(this).closest('tr').remove();
+        }
+    });
+});
+</script>
+</body>
+</html>
