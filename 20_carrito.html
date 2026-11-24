@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carrito - Café Central</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container wide">
+    <header class="app-header">
+        <div class="logo-area">
+            <i class="fa-solid fa-cart-shopping"></i>
+            <span>CAFÉ CENTRAL - CARRITO</span>
+        </div>
+        <button class="nav-toggle" id="navToggle"><i class="fa-solid fa-bars"></i></button>
+    </header>
+
+    <main class="app-content">
+        <h2 class="text-center mb-4" style="color: var(--primary-brown);" id="tituloCarrito">MI CARRITO <i class="fa-solid fa-cart-shopping"></i></h2>
+
+        <!-- Vista del COMPRADOR: su carrito -->
+        <div id="vistaComprador" style="display:none;">
+            <div class="table-responsive">
+                <table class="custom-table" id="tablaCarrito">
+                    <thead>
+                        <tr>
+                            <th>PRODUCTO</th>
+                            <th>PRECIO</th>
+                            <th>CANTIDAD</th>
+                            <th>SUBTOTAL</th>
+                            <th>QUITAR</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="cart-box" style="margin-top:15px;">
+                <div class="form-group">
+                    <label>Notas para el pedido (opcional):</label>
+                    <input type="text" id="notasPedido" class="form-control" placeholder="Ej. sin azúcar, leche deslactosada...">
+                </div>
+                <div class="form-group">
+                    <label>Forma de pago:</label>
+                    <select id="formaPago" class="form-control">
+                        <option value="Efectivo">Efectivo</option>
+                        <option value="Tarjeta">Tarjeta</option>
+                        <option value="Transferencia">Transferencia</option>
+                    </select>
+                </div>
+                <div class="cart-total" style="font-size:1.1rem;"><span>TOTAL</span><span id="totalCarrito">$0.00</span></div>
+                <button class="btn-green btn-block" id="btnConfirmarPedido"><i class="fa-solid fa-check"></i> CONFIRMAR PEDIDO</button>
+                <button class="btn-red btn-block" id="btnVaciarCarrito" style="margin-top:8px;"><i class="fa-solid fa-trash"></i> VACIAR CARRITO</button>
+            </div>
+
+            <div class="mt-4" style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                <a href="02_menu_principal.html" class="btn-secondary">← SEGUIR COMPRANDO</a>
+                <a href="19_historial_compras.html" class="btn-secondary"><i class="fa-solid fa-clock-rotate-left"></i> MIS PEDIDOS</a>
+            </div>
+        </div>
+
+        <!-- Vista del DUEÑO / ADMIN: lo que la gente está pidiendo -->
+        <div id="vistaDueno" style="display:none;">
+            <p style="font-size:0.85rem; color: var(--text-muted); margin-bottom:12px;">
+                Aquí ves lo que cada cliente tiene en su carrito ahora mismo (aún sin confirmar).
+                Cuando lo confirman pasa a <a href="16_pedidos_local.html">PEDIDOS</a> y al <a href="19_historial_compras.html">HISTORIAL</a>.
+            </p>
+            <div class="table-responsive">
+                <table class="custom-table" id="tablaCarritosClientes">
+                    <thead>
+                        <tr>
+                            <th>CLIENTE</th>
+                            <th>PRODUCTOS EN SU CARRITO</th>
+                            <th>TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <h3 style="color: var(--primary-brown); margin:20px 0 10px;">Pedidos por atender</h3>
+            <div class="table-responsive">
+                <table class="custom-table" id="tablaPorAtender">
+                    <thead>
+                        <tr><th>PEDIDO</th><th>CLIENTE</th><th>PRODUCTOS</th><th>TOTAL</th><th>ESTADO</th><th>TICKET</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div class="mt-4 text-center">
+                <a href="13_panel_dueno.html" class="btn-secondary" id="btnVolverDueno">← VOLVER AL PANEL</a>
+            </div>
+        </div>
+    </main>
+</div>
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/login.js"></script>
+    <script src="js/productos.js"></script>
+    <script src="js/pedidos.js"></script>
+    <script>
+$(document).ready(function(){
+    var usr = obtenerUsuarioActual();
+    if (!usr) {
+        alert('Debes iniciar sesión para ver el carrito.');
+        window.location.href = '08_seleccion_usuario.html';
+        return;
+    }
+
+    function nombreDeCorreo(correo){
+        for (var i = 0; i < usuariosBD.length; i++) {
+            if (usuariosBD[i].correo.toLowerCase() === correo.toLowerCase()) return usuariosBD[i].nombre;
+        }
+        return correo;
+    }
+    function listaItems(items){
+        return items.map(function(it){ return it.cantidad + 'x ' + it.nombre; }).join(', ');
+    }
+
+    /* ----- Comprador ----- */
+    function dibujarMiCarrito(){
+        var items = leerCarrito(usr);
+        var filas = '';
+        for (var i = 0; i < items.length; i++) {
+            var it = items[i];
+            filas += '<tr data-i="' + i + '"><td>' + it.nombre + '</td><td>' + formatoDinero(it.precio) + '</td>' +
+                '<td><button class="btn-secondary btn-menos" style="padding:2px 10px;">−</button> ' +
+                '<strong style="margin:0 8px;">' + it.cantidad + '</strong> ' +
+                '<button class="btn-secondary btn-mas" style="padding:2px 10px;">+</button></td>' +
+                '<td>' + formatoDinero(it.precio * it.cantidad) + '</td>' +
+                '<td><button class="btn-red btn-quitar" style="padding:4px 10px; font-size:0.75rem;">QUITAR</button></td></tr>';
+        }
+        if (!filas) {
+            filas = '<tr><td colspan="5" class="text-center" style="color: var(--text-muted);">Tu carrito está vacío. Ve al menú y presiona ORDENAR en un producto.</td></tr>';
+        }
+        $('#tablaCarrito tbody').html(filas);
+        $('#totalCarrito').text(formatoDinero(totalItems(items)));
+        $('#btnConfirmarPedido, #btnVaciarCarrito').prop('disabled', items.length === 0).css('opacity', items.length ? 1 : 0.5);
+        $('.nav-carrito-n').text(contarCarrito(items));
+    }
+
+    function cambiarCantidad($tr, delta){
+        var items = leerCarrito(usr);
+        var i = $tr.data('i');
+        items[i].cantidad += delta;
+        if (items[i].cantidad <= 0) items.splice(i, 1);
+        guardarCarrito(usr, items);
+        dibujarMiCarrito();
+    }
+
+    /* ----- Dueño / Admin ----- */
+    function dibujarCarritosClientes(){
+        var carritos = leerTodosLosCarritos();
+        var filas = '';
+        for (var i = 0; i < carritos.length; i++) {
+            filas += '<tr><td>' + nombreDeCorreo(carritos[i].correo) + '<br><small style="color:var(--text-muted);">' + carritos[i].correo + '</small></td>' +
+                '<td>' + listaItems(carritos[i].items) + '</td><td>' + formatoDinero(totalItems(carritos[i].items)) + '</td></tr>';
+        }
+        if (!filas) filas = '<tr><td colspan="3" class="text-center" style="color: var(--text-muted);">Ningún cliente tiene productos en su carrito en este momento.</td></tr>';
+        $('#tablaCarritosClientes tbody').html(filas);
+
+        var pedidos = leerPedidos().filter(function(p){ return p.estado === 'Pendiente' || p.estado === 'En preparación'; })
+            .sort(function(a, b){ return a.id - b.id; });
+        filas = '';
+        for (var j = 0; j < pedidos.length; j++) {
+            var p = pedidos[j];
+            filas += '<tr><td>#' + p.id + '</td><td>' + p.cliente + '</td><td>' + listaItems(p.items) + '</td><td>' + formatoDinero(p.total) + '</td>' +
+                '<td>' + badgeEstado(p.estado) + '</td><td><a class="btn-green" style="padding:4px 10px; font-size:0.75rem;" href="21_ticket.html?id=' + p.id + '">VER</a></td></tr>';
+        }
+        if (!filas) filas = '<tr><td colspan="6" class="text-center" style="color: var(--text-muted);">No hay pedidos pendientes.</td></tr>';
+        $('#tablaPorAtender tbody').html(filas);
+    }
+
+    if (usr.rol === 'Comprador') {
+        $('#vistaComprador').show();
+        $(document).on('click', '.btn-mas', function(){ cambiarCantidad($(this).closest('tr'), 1); });
+        $(document).on('click', '.btn-menos', function(){ cambiarCantidad($(this).closest('tr'), -1); });
+        $(document).on('click', '.btn-quitar', function(){ cambiarCantidad($(this).closest('tr'), -9999); });
+        $('#btnVaciarCarrito').click(function(){
+            if (confirm('¿Vaciar todo el carrito?')) { guardarCarrito(usr, []); dibujarMiCarrito(); }
+        });
+        $('#btnConfirmarPedido').click(function(){
+            var items = leerCarrito(usr);
+            if (!items.length) return;
+            var pedido = crearPedido(usr, items, { notas: $('#notasPedido').val().trim(), pago: $('#formaPago').val() });
+            guardarCarrito(usr, []);
+            window.location.href = '21_ticket.html?id=' + pedido.id + '&nuevo=1';
+        });
+        dibujarMiCarrito();
+    } else {
+        $('#tituloCarrito').html('CARRITOS DE CLIENTES <i class="fa-solid fa-cart-shopping"></i>');
+        if (usr.rol === 'Administrador') $('#btnVolverDueno').attr('href', '11_gestion_usuarios.html').text('← VOLVER A ADMINISTRACIÓN');
+        $('#vistaDueno').show();
+        dibujarCarritosClientes();
+        // Se actualiza solo cuando un cliente agrega algo o confirma en otra pestaña
+        window.addEventListener('storage', dibujarCarritosClientes);
+    }
+});
+</script>
+</body>
+</html>
